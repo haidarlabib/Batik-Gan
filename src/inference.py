@@ -5,6 +5,7 @@ Deskripsi: Engine inferensi multi-arsitektur untuk generasi motif batik sintetis
 
 import os
 import io
+import sys
 import zipfile
 from typing import List, Optional, Tuple
 
@@ -12,16 +13,35 @@ import torch
 import numpy as np
 from PIL import Image
 
-from src.models_128 import ImprovedDCGANGenerator128, StyleGAN2ADAGenerator128
-from src.generator import Generator as BaselineDCGANGenerator64
-from src.config import (
-    MODEL_CHECKPOINT_PATH,
-    MODEL_IMPROVED_DCGAN_PATH,
-    MODEL_STYLEGAN2_PATH,
-    MODEL_BASELINE_DCGAN_PATH,
-    IMAGE_SIZE,
-    LATENT_DIM
-)
+# Ensure root and src in sys.path
+_CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+_BASE_DIR = os.path.dirname(_CURRENT_DIR)
+for p in [_BASE_DIR, _CURRENT_DIR]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
+try:
+    from src.models_128 import ImprovedDCGANGenerator128, StyleGAN2ADAGenerator128
+    from src.generator import Generator as BaselineDCGANGenerator64
+    from src.config import (
+        MODEL_CHECKPOINT_PATH,
+        MODEL_IMPROVED_DCGAN_PATH,
+        MODEL_STYLEGAN2_PATH,
+        MODEL_BASELINE_DCGAN_PATH,
+        IMAGE_SIZE,
+        LATENT_DIM
+    )
+except (ImportError, ModuleNotFoundError):
+    from models_128 import ImprovedDCGANGenerator128, StyleGAN2ADAGenerator128
+    from generator import Generator as BaselineDCGANGenerator64
+    from config import (
+        MODEL_CHECKPOINT_PATH,
+        MODEL_IMPROVED_DCGAN_PATH,
+        MODEL_STYLEGAN2_PATH,
+        MODEL_BASELINE_DCGAN_PATH,
+        IMAGE_SIZE,
+        LATENT_DIM
+    )
 
 def get_device() -> torch.device:
     """Mendeteksi ketersediaan hardware GPU (CUDA) atau CPU Multi-Core."""
@@ -42,7 +62,7 @@ def load_generator(
     device = get_device()
     
     if model_type == "stylegan2_ada":
-        gen = StyleGAN2ADAGenerator128(z_dim=100, w_dim=128, nc=3)
+        gen = StyleGAN2ADAGenerator128(z_dim=100, w_dim=256, nc=3)
         res = 128
         ckpt = checkpoint_path or MODEL_STYLEGAN2_PATH
         if not os.path.exists(ckpt):

@@ -19,7 +19,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
-from src.preprocessing import get_transforms
+try:
+    from src.preprocessing import get_transforms
+except (ImportError, ModuleNotFoundError):
+    from preprocessing import get_transforms
 
 class BatikDataset(Dataset):
     """PyTorch Dataset untuk citra motif batik tidak berlabel dengan in-memory caching."""

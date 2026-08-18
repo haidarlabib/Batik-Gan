@@ -13,20 +13,38 @@ from PIL import Image
 import streamlit as st
 
 # Setup Path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+SRC_DIR = os.path.join(ROOT_DIR, "src")
+for p in [ROOT_DIR, SRC_DIR]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
-from src.config import (
-    DATASET_STATS,
-    EXPERIMENT_RESULTS,
-    IMAGE_SIZE,
-    LATENT_DIM
-)
-from src.inference import (
-    load_generator,
-    generate_batik_images,
-    create_zip_package,
-    get_device
-)
+try:
+    from src.config import (
+        DATASET_STATS,
+        EXPERIMENT_RESULTS,
+        IMAGE_SIZE,
+        LATENT_DIM
+    )
+    from src.inference import (
+        load_generator,
+        generate_batik_images,
+        create_zip_package,
+        get_device
+    )
+except (ImportError, ModuleNotFoundError):
+    from config import (
+        DATASET_STATS,
+        EXPERIMENT_RESULTS,
+        IMAGE_SIZE,
+        LATENT_DIM
+    )
+    from inference import (
+        load_generator,
+        generate_batik_images,
+        create_zip_package,
+        get_device
+    )
 
 # -----------------------------------------------------------------------------
 # Konfigurasi Halaman & Styling Tema Budaya Indonesia
@@ -59,7 +77,7 @@ CUSTOM_CSS = """
     }
     
     h1, h2, h3, .brand-title {
-        font-family: 'Cinzel', serif !0important;
+        font-family: 'Cinzel', serif !important;
         letter-spacing: 0.5px;
     }
     

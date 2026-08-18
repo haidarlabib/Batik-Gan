@@ -18,8 +18,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import torch
 import torchvision.utils as vutils
-from src.generator import Generator
-from src.preprocessing import denormalize, tensor_to_pil
+try:
+    from src.generator import Generator
+    from src.preprocessing import denormalize, tensor_to_pil
+except (ImportError, ModuleNotFoundError):
+    from generator import Generator
+    from preprocessing import denormalize, tensor_to_pil
 
 def generate_images(
     num_images: int = 16,

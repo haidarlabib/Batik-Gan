@@ -15,7 +15,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import torch
 import torch.nn as nn
-from src.generator import weights_init
+try:
+    from src.generator import weights_init
+except (ImportError, ModuleNotFoundError):
+    from generator import weights_init
 
 class Discriminator(nn.Module):
     """Discriminator Network untuk DCGAN 64x64."""
