@@ -1,0 +1,18 @@
+{
+  "model_evaluated": "D:\\2.projek kuliah\\projek batik\\outputs\\checkpoints\\generator_final.pth",
+  "test_dataset_size": 244,
+  "generated_samples_evaluated": 244,
+  "fid_score": 2020.6011534339418,
+  "diversity_analysis": {
+    "num_evaluated_images": 244,
+    "pairwise_l2_mean": 13.938712842754107,
+    "pairwise_l2_std": 8.128859387729232,
+    "pairwise_l1_mean": 1345.0233028690893,
+    "pairwise_cosine_mean": 0.009436281721345153,
+    "mode_collapse_detected": false
+  },
+  "interpretation": {
+    "fid": "Semakin rendah nilai FID, semakin mirip distribusi fitur citra sintetis terhadap data uji asli.",
+    "mode_collapse": "Distribusi pairwise distance yang menyebar luas mengonfirmasi bahwa generator menghasilkan variasi motif beragam dan bebas dari mode collapse."
+  }
+}

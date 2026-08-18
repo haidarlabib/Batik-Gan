@@ -1,0 +1,91 @@
+{
+  "dataset_directory": "D:\\2.projek kuliah\\projek batik\\dataset",
+  "total_files": 1216,
+  "valid_images_count": 1216,
+  "corrupt_images_count": 0,
+  "corrupt_images_list": [],
+  "file_extensions": {
+    ".png": 1216
+  },
+  "color_modes": {
+    "RGB": 1216
+  },
+  "channels_distribution": {
+    "3_channels": 1216
+  },
+  "resolutions": {
+    "1024x1024": 1216
+  },
+  "file_sizes_bytes": {
+    "min": 233215,
+    "max": 1812347,
+    "mean": 770104.0740131579,
+    "median": 756898.0
+  },
+  "exact_duplicates_count": 0,
+  "exact_duplicates_groups": {},
+  "near_duplicates_dhash_count": 107,
+  "near_duplicates_sample": {
+    "aa4db26969b24daa": [
+      "0b.png",
+      "585b.png"
+    ],
+    "6971339696337169": [
+      "105b.png",
+      "148a.png"
+    ],
+    "cc2b33cccc332bcc": [
+      "109b.png",
+      "307b.png"
+    ],
+    "cc3371cccc7133cc": [
+      "112a.png",
+      "117a.png",
+      "290a.png",
+      "337b.png",
+      "44a.png",
+      "530a.png"
+    ],
+    "cc7133cccc3371cc": [
+      "112b.png",
+      "290b.png",
+      "312b.png",
+      "44b.png",
+      "530b.png",
+      "91a.png"
+    ],
+    "b24db26969b24db2": [
+      "113a.png",
+      "12b.png",
+      "354a.png"
+    ],
+    "69b24db2b24db269": [
+      "113b.png",
+      "12a.png"
+    ],
+    "178ecc7171cc8e17": [
+      "114a.png",
+      "435b.png",
+      "549b.png",
+      "63b.png"
+    ],
+    "17cccc7171cccc17": [
+      "115a.png",
+      "304b.png"
+    ],
+    "d469b25555b269d4": [
+      "116a.png",
+      "526b.png"
+    ]
+  },
+  "filename_pattern_analysis": {
+    "matched_pattern_count": 1216,
+    "unique_base_ids_count": 608,
+    "suffixes_count": {
+      "a": 608,
+      "b": 608
+    },
+    "min_base_id": 0,
+    "max_base_id": 607
+  }
+}

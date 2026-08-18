@@ -1,0 +1,29 @@
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Environments & Virtual Envs
+.env
+.venv/
+venv/
+ENV/
+env/
+
+# Streamlit secrets
+.streamlit/secrets.toml
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Intermediate training checkpoints (Keep final model in models/generator_final.pth)
+outputs/checkpoints/generator_epoch_*.pth
+outputs/checkpoints/discriminator_epoch_*.pth
+outputs/checkpoints/discriminator_final.pth
