@@ -1,0 +1,26 @@
+{
+  "dataset_name": "Authentic Unlabelled Batik Motif Dataset",
+  "total_original_images": 1216,
+  "valid_images": 1216,
+  "corrupt_images": 0,
+  "exact_duplicates_count": 0,
+  "near_duplicate_identical_dhash_count": 110,
+  "resolution_distribution": {
+    "1024x1024": 1216
+  },
+  "num_base_ids": 608,
+  "color_statistics": {
+    "r_mean_overall": 158.35679646542198,
+    "g_mean_overall": 134.86254114853708,
+    "b_mean_overall": 127.32919898786042,
+    "brightness_mean": 141.02852224676232,
+    "brightness_std": 52.6841303361953,
+    "sharpness_laplacian_mean": 3848.278123711285
+  },
+  "homogeneity_analysis": {
+    "pairwise_color_distance_mean": 150.09538762197167,
+    "pairwise_color_distance_std": 74.6683444612597,
+    "is_dataset_too_homogenous": false,
+    "diversity_verdict": "Dataset memiliki keragaman visual yang baik: variasi palet warna soga cokelat, indigo, krem, dan gelap tersebar merata dengan ragam kerapatan kontur motif."
+  }
+}

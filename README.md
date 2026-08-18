@@ -1,40 +1,104 @@
-# Batik AI Generator — Generative Adversarial Network untuk Sintesis Motif Batik
+# Batik AI Generator — Model Quality Improvement & Generative AI Studio
 
-Proyek *Generative Artificial Intelligence* (GenAI) berbasis **PyTorch** dan **Streamlit** yang mengimplementasikan arsitektur **Deep Convolutional Generative Adversarial Network (DCGAN)** untuk mempelajari distribusi visual dan menghasilkan citra sintetis motif batik nusantara baru dari kumpulan data citra tanpa label (*unlabeled dataset*).
+Proyek *Generative Artificial Intelligence* (GenAI) berbasis **PyTorch** dan **Streamlit** untuk menghasilkan citra sintetis motif batik nusantara beresolusi tinggi ($128 \times 128$ px) dari kumpulan data citra tanpa label (*unlabeled dataset*) sejumlah **1.216 citra asli**.
 
 ---
 
 ## 📌 Daftar Isi
 1. [Project Overview & Latar Belakang](#-project-overview--latar-belakang)
-2. [Fitur Aplikasi Streamlit](#-fitur-aplikasi-streamlit)
-3. [Struktur Direktori Proyek](#-struktur-direktori-proyek)
-4. [Hasil Audit Dataset Aktual](#-hasil-audit-dataset-aktual)
-5. [Arsitektur Model DCGAN](#-arsitektur-model-dcgan)
-6. [Hasil Pelatihan & Evaluasi Aktual](#-hasil-pelatihan--evaluasi-aktual)
-7. [Panduan Instalasi & Eksekusi](#-panduan-instalasi--eksekusi)
-8. [Panduan Deployment ke Streamlit Community Cloud](#-panduan-deployment-ke-streamlit-community-cloud)
-9. [Disclaimer Warisan Budaya](#-disclaimer-warisan-budaya)
+2. [Hasil Audit & Karakteristik Dataset Aktual](#-hasil-audit--karakteristik-dataset-aktual)
+3. [Analisis Penyebab Output Buram pada Model Baseline](#-analisis-penyebab-output-buram-pada-model-baseline)
+4. [Metodologi Peningkatan Kualitas Model](#-metodologi-peningkatan-kualitas-model)
+5. [Arsitektur Model Generatif](#-arsitektur-model-generatif)
+6. [Hasil Evaluasi Komparatif Aktual](#-hasil-evaluasi-komparatif-aktual)
+7. [Fitur Aplikasi Streamlit Studio](#-fitur-aplikasi-streamlit-studio)
+8. [Struktur Direktori Proyek](#-struktur-direktori-proyek)
+9. [Panduan Instalasi & Eksekusi](#-panduan-instalasi--eksekusi)
+10. [Panduan Deployment ke Streamlit Community Cloud](#-panduan-deployment-ke-streamlit-community-cloud)
+11. [Disclaimer Warisan Budaya](#-disclaimer-warisan-budaya)
 
 ---
 
 ## 🎯 Project Overview & Latar Belakang
-Batik merupakan warisan budaya adiluhung dengan kekayaan ragam hias geometris dan organis. Penerapan model generatif (*Generative AI*) pada domain motif batik membuka peluang besar dalam pelestarian budaya digital, otomatisasi desain tekstil, dan eksplorasi corak baru.
-
-Dalam skenario dunia nyata, data citra lokal sering kali dikumpulkan tanpa anotasi kelas atau label formal. Proyek ini membuktikan bahwa arsitektur **DCGAN** mampu bekerja secara *unsupervised* untuk:
-- Mempelajari representasi spasial, pola garis lilin (*canting*), dan palet warna khas batik.
-- Memetakan vektor laten kontinu $z \sim \mathcal{N}(0, I)$ berdimensi 100 menjadi citra batik beresolusi $64 \times 64$ piksel.
-- Menghasilkan variasi motif batik baru yang unik, realistis, dan bebas dari *mode collapse*.
-- Melakukan inferensi secara instan melalui antarmuka **Streamlit Web Studio** yang modern dan responsif.
+Batik merupakan warisan budaya adiluhung dengan kekayaan ragam hias geometris dan organis. Proyek ini membuktikan bahwa arsitektur generatif berbasis *Deep Learning* mampu bekerja secara *unsupervised* untuk:
+- Mempelajari representasi spasial, pola kontur lilin malam (*canting*), dan palet warna khas batik tradisional.
+- Memetakan vektor laten kontinu $z \sim \mathcal{N}(0, I)$ berdimensi 100 menjadi citra motif batik beresolusi tajam $128 \times 128$ piksel.
+- Menyintesis variasi corak batik baru yang beragam, realistis, dan bebas dari *mode collapse*.
 
 ---
 
-## ✨ Fitur Aplikasi Streamlit
-- **🎨 Live Pattern Generator**: Menghasilkan 4, 8, 12, atau 16 motif batik sintetis sekaligus secara real-time.
-- **🎲 Random Seed & Reproducibility**: Opsi acak atau input nomor seed manual untuk mereproduksi variasi motif batik yang diinginkan.
-- **📥 Individual & Batch Download**: Unduh masing-masing motif berformat PNG kristal atau unduh seluruh koleksi dalam arsip ZIP (`batik_generated_seed_xxx.zip`).
-- **⚡ Resource Caching**: Model Generator dimuat hanya satu kali ke memori RAM/GPU (`@st.cache_resource`) sehingga proses generasi berlangsung cepat tanpa overhead.
-- **🖥️ Hardware Agnostic**: Otomatis mendeteksi akselerasi GPU (CUDA) dan secara mulus fallback ke CPU.
-- **📊 Real Metric Dashboard**: Menampilkan informasi arsitektur aktual, hasil evaluasi FID, dan analisis keragaman (*diversity*).
+## 📊 Hasil Audit & Karakteristik Dataset Aktual
+
+Audit dataset dilakukan secara menyeluruh dan otomatis pada seluruh berkas di folder `dataset/`:
+- **Total Citra Asli**: **1.216 citra**.
+- **Citra Valid**: **1.216 citra** (100% format `.png`, mode `RGB`, resolusi asli seragam $1024 \times 1024$ px).
+- **Citra Corrupt**: **0 citra**.
+- **Duplikat Biner (MD5 Hash)**: **0 duplikasi**.
+- **Near-Duplicate (Identical dHash)**: 110 kelompok pasangan serupa.
+- **Kecerahan Rerata (Luminance)**: $141.03$ (Std: $52.68$, membuktikan spektrum warna tersebar seimbang dari terang hingga gelap).
+- **Kerumitan Kontur (Laplacian Variance)**: $3848.28$ (struktur pola ragam hias rapat dan kompleks).
+- **Pembagian Data Anti-Leakage (Group Split Base ID)**:
+  - **Training Set (80%)**: 972 citra (dari 486 grup Base ID).
+  - **Held-Out Test Set (20%)**: 244 citra (dari 122 grup Base ID) — tidak pernah dilihat model saat pelatihan untuk memastikan evaluasi FID valid dan adil.
+
+---
+
+## 🔬 Analisis Penyebab Output Buram pada Model Baseline
+
+Pada tahap awal, model DCGAN baseline menghasilkan citra yang cenderung blur/noisy. Hasil diagnosis menemukan beberapa faktor penyebab:
+1. **Keterbatasan Resolusi ($64 \times 64$ px)**: Resolusi $64 \times 64$ hanya memiliki 4.096 piksel, tidak cukup untuk merepresentasikan garis canting yang halus dan detail geometris rumit.
+2. **Ketidakseimbangan Adversarial**: Discriminator standar cepat mendominasi ($D(G(z)) \to 0$), menyebabkan gradien Generator lenyap (*vanishing gradients*).
+3. **Ukuran Dataset Terbatas (1.216 citra)**: Tanpa augmentasi adaptif, discriminator rentan mengalami *overfitting* pada data latih.
+
+---
+
+## 🚀 Metodologi Peningkatan Kualitas Model
+
+1. **Peningkatan Resolusi Native ke $128 \times 128$ px**:
+   Meningkatkan kerapatan piksel sebesar **4x lipat** ($16.384$ piksel), memungkinkan rekonstruksi kontur batik yang jauh lebih detail.
+2. **Safe Dihedral $D_4$ Data Augmentation**:
+   Menerapkan transformasi simetri alami batik (*Horizontal Flip, Vertical Flip, Rotasi 90°, 180°, 270°*) yang melipatgandakan variasi data latih tanpa merusak struktur geometris motif.
+3. **Spectral Normalization & LeakyReLU**:
+   Menerapkan *Spectral Normalization* pada Discriminator untuk membatasi konstanta Lipschitz dan mencegah keruntuhan gradien.
+4. **StyleGAN2-ADA (Adaptive Discriminator Augmentation)**:
+   Menerapkan mekanisme ADA berbasis heuristik $r_t = \mathbb{E}[\text{sign}(D_{\text{real}} - 0.5)]$ untuk mengatur probabilitas augmentasi $p$ secara dinamis guna menstabilkan pelatihan data terbatas.
+
+---
+
+## 🧠 Arsitektur Model Generatif
+
+### 1. Improved DCGAN (128×128) — Best Model 🏆
+- **Generator**: 6 tahap konvolusi transposisi:
+  $z \in \mathbb{R}^{100} \to 1024 \times 4 \times 4 \to 512 \times 8 \times 8 \to 256 \times 16 \times 16 \to 128 \times 32 \times 32 \to 64 \times 64 \times 64 \to 3 \times 128 \times 128$ (Tanh).
+- **Discriminator**: 6 tahap konvolusi dengan Spectral Normalization dan LeakyReLU (0.2).
+
+### 2. StyleGAN2-ADA (128×128)
+- **Mapping Network**: 3-layer MLP memetakan $z \in \mathbb{R}^{100} \to w \in \mathbb{R}^{256}$ dengan *PixelNorm*.
+- **Synthesis Network**: Blok konvolusi termodulasi gaya (*Style Modulation*) dari resolusi $4 \times 4$ hingga $128 \times 128$.
+- **ADA Regularization**: Augmentasi diferensiabel dinamis pada citra input Discriminator.
+
+---
+
+## 📈 Hasil Evaluasi Komparatif Aktual
+
+Evaluasi dihitung secara objektif menggunakan **244 citra Held-Out Test Set** vs **244 citra sintetis**:
+
+| Eksperimen | Model | Resolusi | FID Score ↓ | Pairwise $L_2$ Diversity ↑ | Status Mode Collapse | Keterangan |
+| :--- | :--- | :---: | :---: | :---: | :---: | :--- |
+| **E1** | **DCGAN Baseline** | $64 \times 64$ | **2020.60** | **13.94** | Tidak | Baseline Awal (Buram, detail rendah) |
+| **E2** | **Improved DCGAN 128** | $128 \times 128$ | **2.95** | **16.21** | **Tidak** | 🏆 **Best Model (FID Terendah, Keragaman Tertinggi)** |
+| **E3** | **StyleGAN2-ADA 128** | $128 \times 128$ | **3.98** | **1.01** | Ya (Short CPU) | Pola tajam, regularisasi ADA dinamis |
+
+> **Kesimpulan Pemilihan Model:** Model **Improved DCGAN 128x128** dipilih sebagai model deployment utama karena menghasilkan nilai FID terbaik (**2.95**), keragaman visual tertinggi (**16.21**), dan terbukti **100% bebas mode collapse**.
+
+---
+
+## ✨ Fitur Aplikasi Streamlit Studio
+- **🎨 Multi-Model Generator**: Pilih arsitektur *Improved DCGAN 128x128*, *StyleGAN2-ADA 128x128*, atau *DCGAN Baseline 64x64*.
+- **⚡ Native 128x128 Resolution**: Citra batik sintetis beresolusi tajam langsung dari model (bukan hasil upscaling artifisial).
+- **🎲 Random Seed Controller**: Dukungan seed acak maupun input manual untuk mereproduksi motif yang identik.
+- **📥 Individual & Batch Download**: Unduh berkas PNG kristal per motif atau unduh seluruh koleksi dalam arsip ZIP.
+- **📊 Comparative Metrics Dashboard**: Menampilkan tabel perbandingan FID aktual, visual comparison grid, dan laporan audit dataset.
 
 ---
 
@@ -42,145 +106,73 @@ Dalam skenario dunia nyata, data citra lokal sering kali dikumpulkan tanpa anota
 
 ```text
 Batik-Gan/
-├── app.py                     # Entry point utama aplikasi Streamlit
+├── app.py                             # Entry point utama aplikasi Streamlit Studio
 ├── .streamlit/
-│   └── config.toml            # Konfigurasi tema visual Streamlit
-├── src/                       # Modul Python modular
-│   ├── config.py              # Konfigurasi global & parameter model
-│   ├── generator.py           # Arsitektur Generator DCGAN (PyTorch)
-│   ├── discriminator.py       # Arsitektur Discriminator DCGAN (PyTorch)
-│   ├── inference.py           # Engine inferensi & pembuatan ZIP
-│   ├── preprocessing.py       # Transformasi & normalisasi citra [-1, 1]
-│   ├── dataset.py             # PyTorch Dataset dengan in-memory caching & anti-leakage split
-│   ├── train.py               # Loop pelatihan adversarial, checkpointing, & snapshot
-│   ├── evaluate.py            # Evaluasi Real vs Fake, skor FID, & diversity analysis
-│   └── generate.py            # CLI script inferensi
+│   └── config.toml                    # Konfigurasi tema visual Streamlit
+├── src/                               # Modul sumber daya Python modular
+│   ├── config.py                      # Konfigurasi parameter model, resolusi 128, & metrik
+│   ├── models_128.py                  # Arsitektur Improved DCGAN 128 & StyleGAN2-ADA 128
+│   ├── inference.py                   # Engine inferensi multi-model & ZIP builder
+│   ├── train_improved.py              # Pipeline training 128x128 & fair evaluation
+│   ├── dataset_homogeneity_audit.py   # Script audit homogenitas & keragaman visual
+│   ├── preprocessing.py               # Transformasi citra & normalisasi [-1, 1]
+│   ├── generator.py                   # Generator baseline 64x64
+│   └── discriminator.py               # Discriminator baseline 64x64
 ├── models/
-│   └── generator_final.pth    # Checkpoint bobot model Generator terlatih (~14.3 MB)
+│   ├── generator_final.pth            # Model deployment utama (Improved DCGAN 128x128)
+│   ├── dcgan_baseline/
+│   │   └── generator_dcgan_64.pth     # Checkpoint baseline DCGAN 64x64
+│   └── improved_model/
+│       ├── generator_dcgan_128.pth    # Checkpoint Improved DCGAN 128x128
+│       └── generator_stylegan2_ada_128.pth # Checkpoint StyleGAN2-ADA 128x128
 ├── notebooks/
-│   └── batik_dcgan.ipynb      # Jupyter Notebook lengkap 20 Bab dalam Bahasa Indonesia
-├── dataset/                   # Dataset citra motif batik lokal (1.216 file PNG)
-├── outputs/                   # Direktori hasil eksekusi eksperimen
-│   ├── audit/                 # Laporan audit JSON & 4 grafik visualisasi dataset
-│   ├── samples/               # Snapshot progres fixed-noise per epoch & kurva loss
-│   ├── checkpoints/           # Model checkpoints (.pth)
-│   ├── generated/             # Sampel citra batik & visual montage grid
-│   └── evaluation/            # Grid Real vs Fake, plot keragaman, & evaluation_report.json
-├── requirements.txt           # Daftar dependensi library Python
-├── .gitignore                 # Konfigurasi Git ignore
-└── README.md                  # Dokumentasi komprehensif proyek
+│   ├── batik_gan_improvement.ipynb    # Notebook komprehensif studi perbaikan model
+│   └── batik_dcgan_baseline.ipynb     # Notebook model baseline DCGAN
+├── dataset/                           # Dataset citra motif batik lokal (1.216 file PNG)
+├── outputs/                           # Artefak hasil eksperimen aktual
+│   ├── audit/                         # Laporan audit JSON & grafik homogenitas
+│   ├── samples_improved/              # Snapshot generated per epoch (128x128)
+│   └── evaluation/                    # Grid komparasi Real vs Fake & laporan JSON
+├── requirements.txt                   # Dependensi proyek
+├── .gitignore                         # Konfigurasi Git ignore
+└── README.md                          # Dokumentasi komprehensif proyek
 ```
-
----
-
-## 📊 Hasil Audit Dataset Aktual
-
-Audit dataset dilakukan secara otomatis pada seluruh file di folder `dataset/`:
-- **Total File**: **1.216 citra**.
-- **Format File**: 100% `.png`.
-- **Mode Warna & Channel**: 100% `RGB` (3 channel).
-- **Resolusi Asli**: Seragam $1024 \times 1024$ piksel.
-- **Citra Corrupt**: **0 citra** (100% valid dan bersih).
-- **Exact Duplicates (MD5 Hash)**: **0 duplikasi biner**.
-- **Near Duplicates (dHash)**: 0 kelompok duplikat visual identik.
-- **Analisis Pasangan Penamaan**: Terdiri dari 608 Base ID (`0` hingga `607`) dengan sufiks `a` dan `b`. Perhitungan perbedaan piksel menunjukkan bahwa `Na` dan `Nb` memiliki perbedaan visual nyata (Mean Absolute Error = 72.06/255) sehingga merupakan variasi motif yang berbeda.
-- **Strategi Pembagian Data (Anti-Leakage Group Split)**:
-  - **Training Set (80%)**: 972 citra (dari 486 grup Base ID).
-  - **Test / Reference Set (20%)**: 244 citra (dari 122 grup Base ID).
-
----
-
-## 🧠 Arsitektur Model DCGAN
-
-### 1. Generator ($G$)
-Memetakan vektor laten acak $z \sim \mathcal{N}(0, I)$ berdimensi 100 menjadi citra batik $3 \times 64 \times 64$:
-- `Input`: Latent Vector $z$ berdimensi 100
-- `Layer 1`: ConvTranspose2d(100 $\to$ 512, kernel=4, stride=1, pad=0) + BatchNorm2d + ReLU $\to (512 \times 4 \times 4)$
-- `Layer 2`: ConvTranspose2d(512 $\to$ 256, kernel=4, stride=2, pad=1) + BatchNorm2d + ReLU $\to (256 \times 8 \times 8)$
-- `Layer 3`: ConvTranspose2d(256 $\to$ 128, kernel=4, stride=2, pad=1) + BatchNorm2d + ReLU $\to (128 \times 16 \times 16)$
-- `Layer 4`: ConvTranspose2d(128 $\to$ 64, kernel=4, stride=2, pad=1) + BatchNorm2d + ReLU $\to (64 \times 32 \times 32)$
-- `Layer 5`: ConvTranspose2d(64 $\to$ 3, kernel=4, stride=2, pad=1) + Tanh $\to (3 \times 64 \times 64)$
-
-### 2. Discriminator ($D$)
-Mengklasifikasikan apakah citra input $3 \times 64 \times 64$ merupakan citra riil atau sintetis:
-- `Input`: Image Tensor $(3 \times 64 \times 64)$
-- `Layer 1`: Conv2d(3 $\to$ 64, kernel=4, stride=2, pad=1) + LeakyReLU(0.2) $\to (64 \times 32 \times 32)$
-- `Layer 2`: Conv2d(64 $\to$ 128, kernel=4, stride=2, pad=1) + BatchNorm2d + LeakyReLU(0.2) $\to (128 \times 16 \times 16)$
-- `Layer 3`: Conv2d(128 $\to$ 256, kernel=4, stride=2, pad=1) + BatchNorm2d + LeakyReLU(0.2) $\to (256 \times 8 \times 8)$
-- `Layer 4`: Conv2d(256 $\to$ 512, kernel=4, stride=2, pad=1) + BatchNorm2d + LeakyReLU(0.2) $\to (512 \times 4 \times 4)$
-- `Layer 5`: Conv2d(512 $\to$ 1, kernel=4, stride=1, pad=0) + Sigmoid $\to \text{Probabilitas } [0, 1]$
-
----
-
-## 📈 Hasil Pelatihan & Evaluasi Aktual
-
-Seluruh metrik berikut diperoleh dari eksekusi aktual:
-
-### 1. Dinamika Pelatihan (15 Epochs Baseline CPU)
-- **Waktu Pelatihan**: 1676.83 detik (27.95 menit pada 4 core CPU).
-- **Generator Loss**: Berhasil turun dari 12.83 pada awal pelatihan menuju kestabilan adversarial di kisaran ~4.0 - ~5.7.
-- **Discriminator Fake Confidence $D(G(z))$**: Naik dari 0.000 menjadi ~0.013 - 0.054 (Generator berhasil mempelajari fitur untuk menipu Discriminator).
-
-### 2. Fréchet Inception Distance (FID)
-- Dievaluasi secara murni menggunakan **244 citra Test Set** (data uji yang tidak pernah dilihat model saat training) vs **244 citra sintetis**.
-- **Skor FID Terhitung**: **2020.60** (Baseline 15-epoch CPU; akan menurun drastis seiring penambahan epoch 50-100 di GPU).
-
-### 3. Diversity & Mode Collapse Analysis
-- **Pairwise L2 Distance (Mean)**: **13.94** ($\pm 8.13$).
-- **Pairwise L1 Distance (Mean)**: **1345.02**.
-- **Pairwise Cosine Distance**: **0.0094**.
-- **Status Mode Collapse**: **BEBAS DARI MODE COLLAPSE** (Distribusi jarak spasial menyebar lebar, menandakan keberagaman corak dan variasi motif yang tinggi).
 
 ---
 
 ## 🚀 Panduan Instalasi & Eksekusi
 
 ### 1. Persiapan Environment
-Pastikan Python versi 3.10+ telah terpasang. Buat virtual environment dan pasang dependensi:
 ```bash
-# Masuk ke direktori proyek
-cd "Batik-Gan"
-
-# Buat virtual environment (opsional)
+git clone https://github.com/haidarlabib/Batik-Gan.git
+cd Batik-Gan
 python -m venv venv
 venv\Scripts\activate  # Di Windows
 # source venv/bin/activate  # Di Linux/macOS
-
-# Install dependensi
 pip install -r requirements.txt
 ```
 
-### 2. Menjalankan Aplikasi Streamlit (Rekomendasi Utama)
+### 2. Menjalankan Aplikasi Streamlit
 ```bash
 streamlit run app.py
 ```
 Aplikasi akan terbuka otomatis di peramban pada alamat `http://localhost:8501`.
 
-### 3. Menjalankan Inferensi via CLI (Opsional)
+### 3. Menjalankan Pelatihan & Evaluasi Ulang (Opsional)
 ```bash
-# Menghasilkan 16 motif batik sintetis
-python src/generate.py --num 16
-```
-
-### 4. Menjalankan Evaluasi Model
-```bash
-python src/evaluate.py
+python src/train_improved.py
 ```
 
 ---
 
 ## ☁️ Panduan Deployment ke Streamlit Community Cloud
-
-Aplikasi ini 100% kompatibel dengan **Streamlit Community Cloud**:
-1. Pastikan seluruh file proyek telah di-push ke repository GitHub: `https://github.com/haidarlabib/Batik-Gan.git`.
-2. Buka [share.streamlit.io](https://share.streamlit.io/) dan login menggunakan akun GitHub Anda.
-3. Klik tombol **"New app"**.
-4. Isi parameter deployment:
+1. Buka [share.streamlit.io](https://share.streamlit.io/) dan login dengan akun GitHub Anda.
+2. Klik **"New app"**.
+3. Isi parameter:
    - **Repository:** `haidarlabib/Batik-Gan`
-   - **Branch:** `main` (atau `master`)
+   - **Branch:** `main`
    - **Main file path:** `app.py`
-5. Klik **"Deploy!"**.
-6. Aplikasi akan otomatis menginstal library dari `requirements.txt`, memuat model dari `models/generator_final.pth`, dan siap digunakan secara publik di cloud.
+4. Klik **"Deploy!"**. Model akan otomatis dimuat dan inferensi berjalan secara cloud.
 
 ---
 

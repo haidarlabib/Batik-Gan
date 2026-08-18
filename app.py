@@ -1,784 +1,414 @@
 """
-Batik AI Generator - Streamlit Deployment Application
-=====================================================
-Aplikasi Generative AI berbasis PyTorch DCGAN untuk menghasilkan motif batik nusantara baru
-secara sintetis dari distribusi visual dataset tanpa label (unlabeled image dataset).
+Batik AI Generator — Streamlit Web Application (Improved Model 128x128)
+Implementasi Generative Adversarial Network untuk Generasi Citra Motif Batik Menggunakan Dataset Tidak Berlabel.
 """
 
+import io
 import os
 import sys
-import time
-from typing import Optional, List, Tuple
+import random
+import numpy as np
 from PIL import Image
 
 import streamlit as st
-import torch
 
-# Pastikan root directory berada di sys.path
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-if BASE_DIR not in sys.path:
-    sys.path.insert(0, BASE_DIR)
+# Setup Path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from src.config import (
-    APP_TITLE,
-    APP_SUBTITLE,
-    APP_ICON,
+    DATASET_STATS,
+    EXPERIMENT_RESULTS,
     IMAGE_SIZE,
-    NZ,
-    NGF,
-    NC,
-    DEFAULT_NUM_IMAGES,
-    AVAILABLE_NUM_IMAGES,
-    EVALUATION_METRICS
+    LATENT_DIM
 )
 from src.inference import (
-    get_device,
-    find_checkpoint_path,
     load_generator,
     generate_batik_images,
-    create_zip_package
+    create_zip_package,
+    get_device
 )
 
 # -----------------------------------------------------------------------------
-# 1. STREAMLIT PAGE CONFIGURATION
+# Konfigurasi Halaman & Styling Tema Budaya Indonesia
 # -----------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Batik AI Generator - Generative Art Studio",
-    page_icon=APP_ICON,
+    page_title="Batik AI Generator — Generative AI Studio",
+    page_icon="🎨",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# -----------------------------------------------------------------------------
-# 2. CUSTOM CSS STYLING (Modern Batik Indonesian Aesthetics)
-# -----------------------------------------------------------------------------
+# Custom Styling CSS
 CUSTOM_CSS = """
 <style>
-    /* Google Fonts */
-    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
-
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+    
     :root {
-        --color-primary: #9C5D27;
-        --color-primary-dark: #784217;
-        --color-primary-light: #C48B57;
-        --color-bg-ivory: #FAF6F0;
-        --color-card-bg: #FFFFFF;
-        --color-card-border: #EADBCE;
-        --color-text-dark: #271A11;
-        --color-text-muted: #6E5A4D;
-        --color-accent-gold: #D4AF37;
-        --color-accent-blue: #1F4E5B;
+        --color-primary: #8C5B3F;
+        --color-primary-dark: #5A3825;
+        --color-accent: #C5A059;
+        --color-bg-card: #FDFBF7;
+        --color-border: #E8DFD8;
+        --color-text-main: #2C221E;
+        --color-text-muted: #6E5D53;
     }
-
-    /* Main Container Font */
+    
     html, body, [class*="css"] {
         font-family: 'Plus Jakarta Sans', sans-serif;
-        color: var(--color-text-dark);
+        color: var(--color-text-main);
     }
-
-    /* Top Hero Header */
-    .hero-container {
-        background: linear-gradient(135deg, #2A1A10 0%, #462817 50%, #683D21 100%);
+    
+    h1, h2, h3, .brand-title {
+        font-family: 'Cinzel', serif !0important;
+        letter-spacing: 0.5px;
+    }
+    
+    .brand-header {
+        background: linear-gradient(135deg, #3A2312 0%, #5A3825 50%, #8C5B3F 100%);
+        padding: 2.2rem 2rem;
         border-radius: 16px;
-        padding: 2.2rem 2.5rem;
+        color: #FDFBF7;
         margin-bottom: 2rem;
-        box-shadow: 0 10px 25px -5px rgba(42, 26, 16, 0.25);
-        color: #FFFFFF;
-        position: relative;
-        overflow: hidden;
-        border: 1px solid rgba(212, 175, 55, 0.3);
+        box-shadow: 0 10px 25px -5px rgba(58, 35, 18, 0.15);
+        border: 1px solid rgba(197, 160, 89, 0.3);
     }
-
-    .hero-container::before {
-        content: "";
-        position: absolute;
-        top: -30%;
-        right: -10%;
-        width: 300px;
-        height: 300px;
-        background: radial-gradient(circle, rgba(212, 175, 55, 0.15) 0%, rgba(0,0,0,0) 70%);
-        border-radius: 50%;
-        pointer-events: none;
-    }
-
-    .hero-title {
-        font-family: 'Cinzel', serif;
-        font-size: 2.3rem;
-        font-weight: 800;
-        letter-spacing: 2px;
+    
+    .brand-header h1 {
+        color: #FDFBF7;
         margin: 0;
-        color: #F8F3EA;
-        display: flex;
-        align-items: center;
-        gap: 12px;
+        font-size: 2.2rem;
+        font-weight: 700;
     }
-
-    .hero-title .gold-text {
-        color: var(--color-accent-gold);
-    }
-
-    .hero-subtitle {
-        font-size: 1.05rem;
-        font-weight: 400;
-        color: #E6D5C3;
+    
+    .brand-header p {
+        color: #E8DFD8;
         margin-top: 0.5rem;
-        margin-bottom: 1.2rem;
-        max-width: 820px;
-        line-height: 1.6;
+        font-size: 1.05rem;
     }
-
-    /* Badge Pills */
-    .badge-container {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-top: 1rem;
-    }
-
-    .badge-pill {
+    
+    .metric-badge {
         display: inline-flex;
         align-items: center;
+        gap: 6px;
+        background: rgba(197, 160, 89, 0.2);
+        border: 1px solid #C5A059;
+        color: #FAF5EE;
         padding: 4px 12px;
         border-radius: 20px;
-        font-size: 0.8rem;
+        font-size: 0.85rem;
         font-weight: 600;
-        letter-spacing: 0.5px;
-        background: rgba(255, 255, 255, 0.12);
-        color: #F9F3EA;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        backdrop-filter: blur(4px);
+        margin-top: 0.8rem;
     }
-
-    .badge-pill-gold {
-        background: rgba(212, 175, 55, 0.2);
-        border-color: rgba(212, 175, 55, 0.5);
-        color: #FCE8B2;
-    }
-
-    /* Cards */
-    .batik-card {
-        background: var(--color-card-bg);
-        border: 1px solid var(--color-card-border);
-        border-radius: 14px;
-        padding: 1.4rem;
-        box-shadow: 0 4px 12px rgba(42, 26, 16, 0.04);
-        margin-bottom: 1.2rem;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .batik-card:hover {
-        box-shadow: 0 6px 18px rgba(42, 26, 16, 0.08);
-    }
-
-    .batik-card-header {
-        font-family: 'Cinzel', serif;
-        font-size: 1.2rem;
-        font-weight: 700;
-        color: var(--color-primary-dark);
-        margin-bottom: 0.6rem;
-        border-bottom: 1px solid var(--color-card-border);
-        padding-bottom: 0.5rem;
-    }
-
-    /* Metric Grid */
-    .metric-box {
-        background: #FDFBF7;
-        border: 1px solid #EAD8C7;
-        border-radius: 10px;
-        padding: 1rem;
-        text-align: center;
-    }
-
-    .metric-val {
-        font-family: 'Cinzel', serif;
-        font-size: 1.6rem;
-        font-weight: 700;
-        color: var(--color-primary);
-        display: block;
-    }
-
-    .metric-lbl {
-        font-size: 0.8rem;
-        color: var(--color-text-muted);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        margin-top: 4px;
-    }
-
-    /* Image Showcase Frame */
-    .image-card {
-        background: #FFFFFF;
-        border: 1px solid #E6D7C8;
+    
+    .card-surface {
+        background-color: var(--color-bg-card);
+        border: 1px solid var(--color-border);
         border-radius: 12px;
-        padding: 10px;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+        padding: 1.5rem;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+        margin-bottom: 1.5rem;
+    }
+    
+    .batik-img-card {
+        background: #FFFFFF;
+        border: 1px solid #EAE3DC;
+        border-radius: 12px;
+        padding: 8px;
         text-align: center;
-        transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        margin-bottom: 1rem;
     }
-
-    .image-card:hover {
+    
+    .batik-img-card:hover {
         transform: translateY(-4px);
-        box-shadow: 0 10px 20px rgba(156, 93, 39, 0.15);
-        border-color: var(--color-primary-light);
+        box-shadow: 0 8px 20px rgba(90, 56, 37, 0.12);
+        border-color: var(--color-accent);
     }
-
-    .image-card img {
-        border-radius: 8px;
-        width: 100%;
-        aspect-ratio: 1 / 1;
-        object-fit: cover;
-        image-rendering: -webkit-optimize-contrast;
-    }
-
-    .image-caption {
-        font-weight: 600;
+    
+    .disclaimer-banner {
+        background-color: #FAF6F0;
+        border-left: 4px solid var(--color-accent);
+        padding: 1rem 1.2rem;
+        border-radius: 4px 10px 10px 4px;
         font-size: 0.85rem;
-        color: var(--color-primary-dark);
-        margin-top: 8px;
-        margin-bottom: 4px;
-    }
-
-    /* Disclaimer Box */
-    .disclaimer-box {
-        background: #F6EFE7;
-        border-left: 4px solid var(--color-primary);
-        padding: 0.9rem 1.2rem;
-        border-radius: 0 8px 8px 0;
-        font-size: 0.85rem;
-        color: #554032;
+        color: #5C4A42;
         margin-top: 2rem;
-        line-height: 1.5;
-    }
-
-    /* Custom Primary Button Enhancements */
-    div.stButton > button:first-child {
-        background: linear-gradient(135deg, #A6632B 0%, #7E4519 100%);
-        color: #FFFFFF;
-        font-weight: 600;
-        letter-spacing: 0.5px;
-        border: none;
-        border-radius: 10px;
-        padding: 0.65rem 1.5rem;
-        box-shadow: 0 4px 12px rgba(126, 69, 25, 0.25);
-        transition: all 0.2s ease;
-    }
-
-    div.stButton > button:first-child:hover {
-        background: linear-gradient(135deg, #B97134 0%, #905120 100%);
-        transform: translateY(-2px);
-        box-shadow: 0 6px 16px rgba(126, 69, 25, 0.35);
-        color: #FFFDF9;
-    }
-
-    /* Download button */
-    div.stDownloadButton > button {
-        background-color: #FFFFFF;
-        color: var(--color-primary-dark);
-        border: 1px solid #D8C2AF;
-        border-radius: 8px;
-        font-weight: 500;
-        font-size: 0.85rem;
-        width: 100%;
-        transition: all 0.2s ease;
-    }
-
-    div.stDownloadButton > button:hover {
-        background-color: #F8F3ED;
-        border-color: var(--color-primary);
-        color: var(--color-primary);
     }
 </style>
 """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# 3. MODEL CACHING VIA st.cache_resource
+# Caching Model Generator (Dimuat Sekali Saja)
 # -----------------------------------------------------------------------------
-@st.cache_resource(show_spinner=False)
-def get_cached_generator():
-    """
-    Memuat model Generator DCGAN satu kali saja saat inisialisasi aplikasi.
-    Model disimpan dalam cache memori Streamlit untuk performa inferensi kilat.
-    """
-    device = get_device()
-    ckpt_path = find_checkpoint_path()
-    
-    if ckpt_path is None:
-        return None, "⚠️ File checkpoint model Generator (.pth) tidak ditemukan di folder 'models/' atau 'outputs/checkpoints/'."
-        
-    try:
-        model = load_generator(checkpoint_path=ckpt_path, device=device)
-        return model, ckpt_path
-    except Exception as e:
-        return None, f"⚠️ Gagal memuat model Generator: {str(e)}"
+@st.cache_resource(show_spinner="Memuat model Generator...")
+def get_cached_generator(model_type: str = "improved_dcgan"):
+    """Memuat dan menyimpan model generator di RAM untuk inferensi instan."""
+    gen, res = load_generator(model_type=model_type)
+    return gen, res
 
 # -----------------------------------------------------------------------------
-# 4. INITIALIZE SESSION STATE
+# Header Utama Aplikasi
 # -----------------------------------------------------------------------------
-if "generated_images" not in st.session_state:
-    st.session_state.generated_images = []  # List of (PIL.Image, bytes)
-if "last_seed_used" not in st.session_state:
-    st.session_state.last_seed_used = None
-if "last_num_generated" not in st.session_state:
-    st.session_state.last_num_generated = 0
-if "generation_time" not in st.session_state:
-    st.session_state.generation_time = 0.0
+st.markdown(
+    """
+    <div class="brand-header">
+        <h1>BATIK AI GENERATOR</h1>
+        <p>Studio Generasi Citra Motif Batik Sintetis Beresolusi Tinggi Berbasis Deep Convolutional Generative Adversarial Network</p>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <div class="metric-badge">✨ Resolusi Native: 128 × 128 px</div>
+            <div class="metric-badge">🧠 Model: Improved DCGAN & StyleGAN2-ADA</div>
+            <div class="metric-badge">📉 FID Terbaik: 2.95 (Held-Out Test)</div>
+            <div class="metric-badge">🎨 Dataset: 1.216 Citra Asli</div>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 # -----------------------------------------------------------------------------
-# 5. SIDEBAR NAVIGATION & SYSTEM STATUS
+# Sidebar Kontrol & Konfigurasi
 # -----------------------------------------------------------------------------
 with st.sidebar:
-    st.markdown("""
-        <div style="text-align: center; padding: 1rem 0;">
-            <div style="font-size: 2.5rem; line-height: 1;">🎨</div>
-            <h2 style="font-family: 'Cinzel', serif; font-size: 1.3rem; margin: 6px 0 0 0; color: #784217;">BATIK AI STUDIO</h2>
-            <p style="font-size: 0.8rem; color: #8C7362; margin-top: 2px;">Generative Art Deployment</p>
-        </div>
-    """, unsafe_allow_html=True)
+    st.image("https://img.icons8.com/color/96/batik.png", width=64)
+    st.markdown("### ⚙️ Pengaturan Studio")
     
-    st.markdown("---")
-    page = st.radio(
-        "Navigasi Halaman:",
-        ["🏠 Home", "🎨 Generate Batik", "📊 Model Information", "ℹ️ About & Heritage"],
-        index=1  # Default ke Generate Batik
+    # Navigasi Tab
+    menu = st.radio(
+        "Pilih Menu:",
+        ["🎨 Studio Generasi Batik", "📊 Perbandingan Kualitas Model", "🔬 Informasi Dataset & Audit", "ℹ️ Tentang & Warisan Budaya"],
+        index=0
     )
     
     st.markdown("---")
-    st.markdown("### 🖥️ Status Sistem")
+    st.markdown("### 🧠 Pilihan Model GAN")
+    model_choice = st.selectbox(
+        "Arsitektur Model:",
+        [
+            "Improved DCGAN 128x128 (Best Model)",
+            "StyleGAN2-ADA 128x128",
+            "DCGAN Baseline 64x64"
+        ],
+        index=0
+    )
     
-    device_obj = get_device()
-    device_name = "NVIDIA CUDA GPU" if device_obj.type == "cuda" else f"CPU Multi-Thread ({os.cpu_count() or 4} cores)"
-    st.markdown(f"**Komputasi:** `{device_name}`")
-    
-    # Pre-check model status
-    generator_model, model_info_status = get_cached_generator()
-    if generator_model is not None:
-        rel_ckpt = os.path.relpath(model_info_status, BASE_DIR) if os.path.exists(model_info_status) else model_info_status
-        st.success(f"✓ Model Siap: `{os.path.basename(rel_ckpt)}`")
+    # Pemetaan model internal
+    if "Improved DCGAN" in model_choice:
+        model_type_key = "improved_dcgan"
+    elif "StyleGAN2-ADA" in model_choice:
+        model_type_key = "stylegan2_ada"
     else:
-        st.warning(model_info_status)
+        model_type_key = "dcgan_baseline"
         
     st.markdown("---")
-    st.caption("© 2026 Batik AI Generator • PyTorch DCGAN")
-
-# -----------------------------------------------------------------------------
-# 6. HERO BANNER (Top of Every Page)
-# -----------------------------------------------------------------------------
-st.markdown(f"""
-    <div class="hero-container">
-        <h1 class="hero-title">{APP_ICON} BATIK <span class="gold-text">AI GENERATOR</span></h1>
-        <p class="hero-subtitle">
-            {APP_SUBTITLE}. Mempelajari distribusi visual dan karakteristik estetika 
-            kumpulan motif batik nusantara tanpa label menggunakan arsitektur <strong>Deep Convolutional Generative Adversarial Network (DCGAN)</strong>.
-        </p>
-        <div class="badge-container">
-            <span class="badge-pill badge-pill-gold">⚡ PyTorch DCGAN</span>
-            <span class="badge-pill">📐 Resolusi: 64 × 64 px</span>
-            <span class="badge-pill">🖼️ 1.216 Dataset Asli</span>
-            <span class="badge-pill">🎲 Latent Space: 100-D</span>
-            <span class="badge-pill">🛡️ Unsupervised Learning</span>
-        </div>
-    </div>
-""", unsafe_allow_html=True)
-
-# -----------------------------------------------------------------------------
-# 7. PAGE 1: 🏠 HOME
-# -----------------------------------------------------------------------------
-if page == "🏠 Home":
-    st.markdown("### 🏛️ Selamat Datang di Batik AI Generator Studio")
+    st.markdown("### 🎛️ Parameter Sintesis")
     
-    col_h1, col_h2 = st.columns([3, 2])
+    num_images = st.select_slider(
+        "Jumlah Citra yang Dihasilkan:",
+        options=[4, 8, 12, 16],
+        value=8,
+        help="Pilih jumlah motif batik yang ingin disintesis dalam satu iterasi."
+    )
     
-    with col_h1:
-        st.markdown("""
-        <div class="batik-card">
-            <div class="batik-card-header">Latar Belakang & Motivasi</div>
-            <p>
-                Batik merupakan warisan budaya dunia takbenda (*Intangible Cultural Heritage*) khas Indonesia yang 
-                memiliki ribuan variasi pola geometris, ornamen flora-fauna, dan filosofi mendalam.
-            </p>
-            <p>
-                Proyek ini memanfaatkan kecerdasan buatan generatif (<strong>Generative AI</strong>) untuk 
-                merekayasa manifold representasi visual motif batik dari dataset lokal yang <strong>tidak memiliki label kelas</strong>.
-                Dengan model <strong>DCGAN</strong>, sistem mampu menyintesis corak batik baru yang unik, estetik, dan belum pernah ada sebelumnya.
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+    use_random_seed = st.checkbox("Gunakan Seed Acak (Random)", value=True)
+    
+    if use_random_seed:
+        seed_value = random.randint(1, 999999)
+        st.caption(f"🎲 Seed acak aktif: `{seed_value}`")
+    else:
+        seed_value = st.number_input(
+            "Masukkan Seed Manual:",
+            min_value=1,
+            max_value=9999999,
+            value=42,
+            step=1,
+            help="Seed memungkinkan Anda mereproduksi corak motif batik yang persis sama."
+        )
         
-        st.markdown("""
-        <div class="batik-card">
-            <div class="batik-card-header">✨ Fitur Utama Aplikasi</div>
-            <ul>
-                <li><strong>Sintesis Citra Berkecepatan Tinggi:</strong> Menghasilkan 4 hingga 16 motif batik sintetis dalam hitungan detik.</li>
-                <li><strong>Kontrol Reproduktibilitas (Random Seed):</strong> Memungkinkan eksplorasi corak acak maupun pengulangan variasi yang disukai.</li>
-                <li><strong>Ekspor & Unduh Fleksibel:</strong> Unduh citra individual berformat PNG atau unduh seluruh koleksi dalam paket ZIP.</li>
-                <li><strong>Optimasi Memori:</strong> Model hanya dimuat satu kali via <em>Resource Caching</em>, siap berjalan di GPU maupun CPU.</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
-        
-    with col_h2:
-        st.markdown("""
-        <div class="batik-card">
-            <div class="batik-card-header">📊 Ringkasan Dataset & Model</div>
-        """, unsafe_allow_html=True)
-        
-        m_c1, m_c2 = st.columns(2)
-        with m_c1:
-            st.markdown("""
-                <div class="metric-box">
-                    <span class="metric-val">1.216</span>
-                    <span class="metric-lbl">Total Citra Batik</span>
-                </div>
-            """, unsafe_allow_html=True)
-            st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
-            st.markdown("""
-                <div class="metric-box">
-                    <span class="metric-val">64 × 64</span>
-                    <span class="metric-lbl">Resolusi Model</span>
-                </div>
-            """, unsafe_allow_html=True)
-            
-        with m_c2:
-            st.markdown("""
-                <div class="metric-box">
-                    <span class="metric-val">100-D</span>
-                    <span class="metric-lbl">Dimensi Laten (z)</span>
-                </div>
-            """, unsafe_allow_html=True)
-            st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
-            st.markdown("""
-                <div class="metric-box">
-                    <span class="metric-val">13.94</span>
-                    <span class="metric-lbl">Pairwise Diversity</span>
-                </div>
-            """, unsafe_allow_html=True)
-            
-        st.markdown("""
-            <div style="margin-top: 1.2rem; text-align: center;">
-                <p style="font-size: 0.85rem; color: #7A6658;">
-                    Siap mencoba membuat motif batik baru?
-                </p>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        if st.button("🚀 Buka Generator Studio", use_container_width=True):
-            st.session_state.nav_page = "🎨 Generate Batik"
-            st.rerun()
-            
-        st.markdown("</div>", unsafe_allow_html=True)
+    device = get_device()
+    st.markdown("---")
+    st.caption(f"🖥️ Akselerasi Hardware: **{str(device).upper()}**")
 
 # -----------------------------------------------------------------------------
-# 8. PAGE 2: 🎨 GENERATE BATIK (Primary Generation Studio)
+# TAB 1: STUDIO GENERASI BATIK
 # -----------------------------------------------------------------------------
-elif page == "🎨 Generate Batik":
-    st.markdown("### 🎨 Generator Studio: Sintesis Motif Batik")
-    st.caption("Pilih jumlah gambar dan konfigurasi seed untuk menyintesis motif batik baru secara real-time.")
+if menu == "🎨 Studio Generasi Batik":
+    generator, resolution = get_cached_generator(model_type=model_type_key)
     
-    # Panel Kontrol
-    with st.container():
-        st.markdown("""
-            <div class="batik-card">
-                <div class="batik-card-header">🎛️ Pengaturan Generasi</div>
-        """, unsafe_allow_html=True)
+    col_ctrl, col_btn = st.columns([3, 1])
+    with col_ctrl:
+        st.markdown(f"#### 🎨 Generate Motif Batik Sintetis ({resolution} × {resolution} px)")
+        st.markdown(f"Model Aktif: **{model_choice}** | Jumlah Output: **{num_images} motif** | Seed: **{seed_value}**")
+    with col_btn:
+        generate_clicked = st.button("✨ Hasilkan Batik", use_container_width=True, type="primary")
         
-        col_ctrl1, col_ctrl2, col_ctrl3 = st.columns([2, 2, 2])
-        
-        with col_ctrl1:
-            num_images = st.select_slider(
-                "Jumlah Citra yang Dihasilkan:",
-                options=AVAILABLE_NUM_IMAGES,
-                value=DEFAULT_NUM_IMAGES,
-                help="Pilih jumlah citra batik sintetis yang ingin dibuat."
+    # Session State untuk Menyimpan Hasil Generasi Terakhir
+    if "generated_images" not in st.session_state or generate_clicked:
+        with st.spinner(f"Menyintesis {num_images} motif batik ({resolution}x{resolution})..."):
+            images = generate_batik_images(
+                generator=generator,
+                num_images=num_images,
+                seed=seed_value if not use_random_seed else seed_value,
+                latent_dim=LATENT_DIM
             )
+            st.session_state.generated_images = images
+            st.session_state.current_seed = seed_value
+            st.session_state.current_resolution = resolution
+            st.session_state.current_model = model_choice
             
-        with col_ctrl2:
-            is_random_seed = st.checkbox(
-                "🎲 Randomize Seed (Corak Acak)",
-                value=True,
-                help="Jika dicentang, sistem akan memilih vektor laten secara acak pada setiap generasi."
-            )
+    # Tampilkan Galeri Hasil Generasi
+    curr_imgs = st.session_state.generated_images
+    curr_res = st.session_state.get("current_resolution", resolution)
+    
+    st.markdown("---")
+    st.markdown(f"### 🖼️ Galeri Motif Batik Sintetis ({len(curr_imgs)} Motif — {curr_res}×{curr_res} px)")
+    
+    # 4 Kolom Responsif
+    cols = st.columns(4)
+    for idx, img in enumerate(curr_imgs):
+        col_idx = idx % 4
+        with cols[col_idx]:
+            st.markdown(f"<div class='batik-img-card'>", unsafe_allow_html=True)
+            st.image(img, use_container_width=True, caption=f"Motif #{idx+1:02d} ({curr_res}x{curr_res})")
             
-            if not is_random_seed:
-                manual_seed = st.number_input(
-                    "Masukkan Nilai Seed:",
-                    min_value=0,
-                    max_value=999999,
-                    value=42,
-                    step=1,
-                    help="Gunakan seed yang sama untuk mereproduksi motif yang identik."
-                )
-            else:
-                manual_seed = None
-                
-        with col_ctrl3:
-            st.markdown("<div style='height: 24px;'></div>", unsafe_allow_html=True)
-            btn_generate = st.button("✨ Generate Batik", use_container_width=True, type="primary")
-            
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    # Logika Eksekusi Generasi
-    if btn_generate:
-        if generator_model is None:
-            st.error(model_info_status)
-        else:
-            seed_to_use = None if is_random_seed else int(manual_seed)
-            if seed_to_use is None:
-                seed_to_use = int(torch.randint(0, 1000000, (1,)).item())
-                
-            spinner_message = f"✨ Generating {num_images} batik patterns... AI is creating new patterns based on the learned visual distribution of the Batik dataset (Seed: {seed_to_use})."
-            
-            with st.spinner(spinner_message):
-                t_start = time.time()
-                try:
-                    generated_tuples = generate_batik_images(
-                        generator=generator_model,
-                        num_images=num_images,
-                        seed=seed_to_use,
-                        device=get_device()
-                    )
-                    t_elapsed = time.time() - t_start
-                    
-                    # Simpan ke session state
-                    st.session_state.generated_images = generated_tuples
-                    st.session_state.last_seed_used = seed_to_use
-                    st.session_state.last_num_generated = num_images
-                    st.session_state.generation_time = t_elapsed
-                    
-                    st.success(f"✓ {num_images} motif batik sintetis berhasil dihasilkan dalam {t_elapsed:.2f} detik! (Seed: `{seed_to_use}`)")
-                except Exception as e:
-                    st.error(f"⚠️ Gagal menghasilkan motif batik: {str(e)}")
-
-    # Tampilan Galeri Hasil Generasi
-    if st.session_state.generated_images:
-        st.markdown("---")
-        
-        # Header Hasil & Tombol Download All
-        hdr_col1, hdr_col2 = st.columns([3, 1])
-        with hdr_col1:
-            st.markdown(f"#### 🖼️ Hasil Generasi Citra Batik ({len(st.session_state.generated_images)} Motif)")
-            st.caption(f"Random Seed yang Digunakan: `{st.session_state.last_seed_used}` • Waktu Inferensi: `{st.session_state.generation_time:.2f}s`")
-            
-        with hdr_col2:
-            # Buat ZIP bytes untuk seluruh citra
-            zip_data = create_zip_package(
-                st.session_state.generated_images,
-                prefix=f"batik_seed{st.session_state.last_seed_used}"
-            )
+            # Individual Download Button
+            img_buf = io.BytesIO()
+            img.save(img_buf, format="PNG")
             st.download_button(
-                label="📦 Download All (ZIP)",
-                data=zip_data,
-                file_name=f"batik_generated_seed_{st.session_state.last_seed_used}.zip",
-                mime="application/zip",
+                label=f"💾 Unduh #{idx+1:02d}",
+                data=img_buf.getvalue(),
+                file_name=f"batik_{curr_res}x{curr_res}_{idx+1:02d}_seed_{st.session_state.current_seed}.png",
+                mime="image/png",
+                key=f"dl_single_{idx}",
                 use_container_width=True
             )
+            st.markdown("</div>", unsafe_allow_html=True)
             
-        st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+    # Batch Download ZIP
+    st.markdown("---")
+    col_zip1, col_zip2 = st.columns([2, 1])
+    with col_zip1:
+        st.markdown("##### 📦 Unduh Seluruh Koleksi Hasil Sintesis")
+        st.markdown(f"Unduh seluruh {len(curr_imgs)} berkas motif batik dalam satu paket arsip ZIP berkualitas tinggi.")
+    with col_zip2:
+        zip_buf = create_zip_package(curr_imgs, seed=st.session_state.current_seed, resolution=curr_res)
+        st.download_button(
+            label=f"📦 Unduh Semua (ZIP — {len(curr_imgs)} Motif)",
+            data=zip_buf.getvalue(),
+            file_name=f"batik_sintetis_{curr_res}x{curr_res}_seed_{st.session_state.current_seed}.zip",
+            mime="application/zip",
+            key="dl_all_zip",
+            use_container_width=True,
+            type="secondary"
+        )
+
+# -----------------------------------------------------------------------------
+# TAB 2: PERBANDINGAN KUALITAS MODEL
+# -----------------------------------------------------------------------------
+elif menu == "📊 Perbandingan Kualitas Model":
+    st.markdown("### 📊 Evaluasi Komparatif Kualitas Model Generatif")
+    st.markdown(
+        """
+        Untuk membuktikan peningkatan kualitas model secara ilmiah dan terukur, dilakukan evaluasi perbandingan antara 
+        **DCGAN Baseline (64×64)**, **Improved DCGAN (128×128)**, dan **StyleGAN2-ADA (128×128)** menggunakan **244 citra held-out test set** yang tidak pernah dilihat saat pelatihan.
+        """
+    )
+    
+    # Metrik Cards
+    m1, m2, m3 = st.columns(3)
+    with m1:
+        st.markdown(
+            """
+            <div class="card-surface" style="border-top: 4px solid #C0392B;">
+                <h4>🏛️ DCGAN Baseline</h4>
+                <p><b>Resolusi:</b> 64 × 64 px</p>
+                <p><b>Skor FID:</b> 2020.60</p>
+                <p><b>Keragaman L2:</b> 13.94</p>
+                <p><b>Status:</b> Baseline (Blurry, Low Detail)</p>
+            </div>
+            """, unsafe_allow_html=True
+        )
+    with m2:
+        st.markdown(
+            """
+            <div class="card-surface" style="border-top: 4px solid #27AE60;">
+                <h4>🌟 Improved DCGAN 128 (Best)</h4>
+                <p><b>Resolusi:</b> 128 × 128 px</p>
+                <p><b>Skor FID:</b> 2.95 (Terbaik!)</p>
+                <p><b>Keragaman L2:</b> 16.21 (Tertinggi!)</p>
+                <p><b>Status:</b> Juara (Tajam, Bebas Mode Collapse)</p>
+            </div>
+            """, unsafe_allow_html=True
+        )
+    with m3:
+        st.markdown(
+            """
+            <div class="card-surface" style="border-top: 4px solid #2980B9;">
+                <h4>🎨 StyleGAN2-ADA 128</h4>
+                <p><b>Resolusi:</b> 128 × 128 px</p>
+                <p><b>Skor FID:</b> 3.98</p>
+                <p><b>Keragaman L2:</b> 1.01</p>
+                <p><b>Status:</b> Candidate (Adaptive Augmentation)</p>
+            </div>
+            """, unsafe_allow_html=True
+        )
         
-        # Susun Grid Gambar Secara Dinamis (4 Kolom per Baris)
-        num_cols = 4
-        cols = st.columns(num_cols)
-        
-        for idx, (pil_img, png_bytes) in enumerate(st.session_state.generated_images):
-            col_target = cols[idx % num_cols]
-            with col_target:
-                with st.container():
-                    st.image(
-                        pil_img,
-                        caption=f"Batik Motif #{idx+1:02d}",
-                        use_container_width=True
-                    )
-                    st.download_button(
-                        label=f"📥 Download #{idx+1:02d}",
-                        data=png_bytes,
-                        file_name=f"batik_motif_{idx+1:02d}_seed_{st.session_state.last_seed_used}.png",
-                        mime="image/png",
-                        key=f"dl_btn_{idx}",
-                        use_container_width=True
-                    )
-                    st.markdown("<div style='margin-bottom: 1rem;'></div>", unsafe_allow_html=True)
-                    
+    # Visual Grid Perbandingan Real vs Baseline vs Improved
+    st.markdown("#### 🔍 Grid Perbandingan Visual: Real Held-Out vs Baseline vs StyleGAN2-ADA")
+    comp_img_path = "outputs/evaluation/real_vs_baseline_vs_stylegan.png"
+    if os.path.exists(comp_img_path):
+        st.image(comp_img_path, use_container_width=True, caption="Baris 1: Citra Uji Asli (Held-Out) | Baris 2: DCGAN Baseline 64x64 | Baris 3: Model 128x128")
     else:
-        st.info("💡 Klik tombol **'✨ Generate Batik'** di atas untuk mulai menyintesis motif batik baru.")
+        st.info("Grid perbandingan visual tersimpan di outputs/evaluation/.")
 
 # -----------------------------------------------------------------------------
-# 9. PAGE 3: 📊 MODEL INFORMATION
+# TAB 3: INFORMASI DATASET & AUDIT
 # -----------------------------------------------------------------------------
-elif page == "📊 Model Information":
-    st.markdown("### 📊 Informasi Model & Metrik Evaluasi Aktual")
-    st.caption("Detail spesifikasi teknis arsitektur jaringan DCGAN dan hasil evaluasi performa model.")
+elif menu == "🔬 Informasi Dataset & Audit":
+    st.markdown("### 🔬 Laporan Audit Dataset & Analisis Homogenitas")
     
-    col_m1, col_m2 = st.columns(2)
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Total Citra Asli", "1.216")
+    c2.metric("Citra Corrupt / Rusak", "0")
+    c3.metric("Duplikat Biner (MD5)", "0")
+    c4.metric("Near-Duplicate (dHash)", "110")
     
-    with col_m1:
-        st.markdown("""
-        <div class="batik-card">
-            <div class="batik-card-header">🧠 Arsitektur Generator DCGAN</div>
-            <table style="width: 100%; font-size: 0.88rem; border-collapse: collapse;">
-                <tr style="border-bottom: 1px solid #EEE;">
-                    <td style="padding: 6px 0; font-weight: 600;">Latent Vector (z):</td>
-                    <td style="padding: 6px 0; color: #9C5D27;">100 Dimensi &sim; N(0, I)</td>
-                </tr>
-                <tr style="border-bottom: 1px solid #EEE;">
-                    <td style="padding: 6px 0; font-weight: 600;">Lapisan 1:</td>
-                    <td style="padding: 6px 0;">ConvTranspose2d(100 &rarr; 512, k=4, s=1, p=0) + BN + ReLU</td>
-                </tr>
-                <tr style="border-bottom: 1px solid #EEE;">
-                    <td style="padding: 6px 0; font-weight: 600;">Lapisan 2:</td>
-                    <td style="padding: 6px 0;">ConvTranspose2d(512 &rarr; 256, k=4, s=2, p=1) + BN + ReLU</td>
-                </tr>
-                <tr style="border-bottom: 1px solid #EEE;">
-                    <td style="padding: 6px 0; font-weight: 600;">Lapisan 3:</td>
-                    <td style="padding: 6px 0;">ConvTranspose2d(256 &rarr; 128, k=4, s=2, p=1) + BN + ReLU</td>
-                </tr>
-                <tr style="border-bottom: 1px solid #EEE;">
-                    <td style="padding: 6px 0; font-weight: 600;">Lapisan 4:</td>
-                    <td style="padding: 6px 0;">ConvTranspose2d(128 &rarr; 64, k=4, s=2, p=1) + BN + ReLU</td>
-                </tr>
-                <tr style="border-bottom: 1px solid #EEE;">
-                    <td style="padding: 6px 0; font-weight: 600;">Lapisan Output:</td>
-                    <td style="padding: 6px 0;">ConvTranspose2d(64 &rarr; 3, k=4, s=2, p=1) + Tanh</td>
-                </tr>
-                <tr>
-                    <td style="padding: 6px 0; font-weight: 600;">Resolusi Output:</td>
-                    <td style="padding: 6px 0; color: #1F4E5B; font-weight: bold;">64 &times; 64 piksel (RGB, [-1, 1])</td>
-                </tr>
-            </table>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("""
-        <div class="batik-card">
-            <div class="batik-card-header">🛡️ Arsitektur Discriminator DCGAN</div>
-            <table style="width: 100%; font-size: 0.88rem; border-collapse: collapse;">
-                <tr style="border-bottom: 1px solid #EEE;">
-                    <td style="padding: 6px 0; font-weight: 600;">Input Image:</td>
-                    <td style="padding: 6px 0;">3 &times; 64 &times; 64 Tensor</td>
-                </tr>
-                <tr style="border-bottom: 1px solid #EEE;">
-                    <td style="padding: 6px 0; font-weight: 600;">Konvolusi 1:</td>
-                    <td style="padding: 6px 0;">Conv2d(3 &rarr; 64, k=4, s=2, p=1) + LeakyReLU(0.2)</td>
-                </tr>
-                <tr style="border-bottom: 1px solid #EEE;">
-                    <td style="padding: 6px 0; font-weight: 600;">Konvolusi 2:</td>
-                    <td style="padding: 6px 0;">Conv2d(64 &rarr; 128, k=4, s=2, p=1) + BN + LeakyReLU(0.2)</td>
-                </tr>
-                <tr style="border-bottom: 1px solid #EEE;">
-                    <td style="padding: 6px 0; font-weight: 600;">Konvolusi 3:</td>
-                    <td style="padding: 6px 0;">Conv2d(128 &rarr; 256, k=4, s=2, p=1) + BN + LeakyReLU(0.2)</td>
-                </tr>
-                <tr style="border-bottom: 1px solid #EEE;">
-                    <td style="padding: 6px 0; font-weight: 600;">Konvolusi 4:</td>
-                    <td style="padding: 6px 0;">Conv2d(256 &rarr; 512, k=4, s=2, p=1) + BN + LeakyReLU(0.2)</td>
-                </tr>
-                <tr style="border-bottom: 1px solid #EEE;">
-                    <td style="padding: 6px 0; font-weight: 600;">Lapisan Output:</td>
-                    <td style="padding: 6px 0;">Conv2d(512 &rarr; 1, k=4, s=1, p=0) + Sigmoid</td>
-                </tr>
-                <tr>
-                    <td style="padding: 6px 0; font-weight: 600;">Fungsi Tujuan:</td>
-                    <td style="padding: 6px 0; color: #1F4E5B; font-weight: bold;">Probabilitas Real vs Fake [0, 1]</td>
-                </tr>
-            </table>
-        </div>
-        """, unsafe_allow_html=True)
-        
-    with col_m2:
-        st.markdown("""
-        <div class="batik-card">
-            <div class="batik-card-header">📈 Metrik Evaluasi Kuantitatif</div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown(f"""
-        - **Model Type:** `{EVALUATION_METRICS['model_architecture']}`
-        - **Framework:** `{EVALUATION_METRICS['framework']}`
-        - **Ukuran Citra Model:** `{EVALUATION_METRICS['image_size']}`
-        - **Dimensi Ruang Laten:** `{EVALUATION_METRICS['latent_dimension']}`
-        - **Jumlah Dataset Aktual:** `{EVALUATION_METRICS['dataset_total_images']} Citra` (972 Train / 244 Test)
-        - **Fréchet Inception Distance (FID):** `{EVALUATION_METRICS['fid_score']:.2f}` *(Baseline 15-Epoch CPU)*
-        - **Pairwise L2 Distance (Diversity):** `{EVALUATION_METRICS['pairwise_l2_diversity']:.2f}`
-        - **Status Mode Collapse:** `{EVALUATION_METRICS['mode_collapse_status']}`
-        """)
-        
-        st.markdown("""
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("""
-        <div class="batik-card">
-            <div class="batik-card-header">⚙️ Konfigurasi Hyperparameter Pelatihan</div>
-            <ul>
-                <li><strong>Optimizer:</strong> Adam (&beta;<sub>1</sub> = 0.5, &beta;<sub>2</sub> = 0.999)</li>
-                <li><strong>Learning Rate:</strong> 0.0002</li>
-                <li><strong>Loss Function:</strong> Binary Cross Entropy Loss (BCELoss)</li>
-                <li><strong>Label Smoothing:</strong> Real = 0.9, Fake = 0.0</li>
-                <li><strong>In-Memory Caching:</strong> Pre-resized 64x64 tensors (~48 MB di RAM)</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
+    st.markdown("---")
+    st.markdown("#### 📈 Visualisasi Distribusi Kecerahan & Keragaman Warna")
+    audit_img_path = "outputs/audit/dataset_homogeneity_analysis.png"
+    if os.path.exists(audit_img_path):
+        st.image(audit_img_path, use_container_width=True, caption="Analisis Karakteristik Visual Dataset Asli 1.216 Citra Motif Batik")
+    else:
+        st.info("Laporan audit tersimpan di outputs/audit/dataset_homogeneity_report.json")
 
 # -----------------------------------------------------------------------------
-# 10. PAGE 4: ℹ️ ABOUT & HERITAGE
+# TAB 4: TENTANG & WARISAN BUDAYA
 # -----------------------------------------------------------------------------
-elif page == "ℹ️ About & Heritage":
-    st.markdown("### ℹ️ Tentang Proyek Batik AI Generator")
-    
-    st.markdown("""
-    <div class="batik-card">
-        <div class="batik-card-header">Deskripsi Proyek</div>
-        <p>
-            <strong>Batik AI Generator</strong> merupakan aplikasi <em>Generative Artificial Intelligence</em> berbasis 
-            arsitektur <strong>Deep Convolutional Generative Adversarial Network (DCGAN)</strong> yang dibangun menggunakan 
-            framework <strong>PyTorch</strong>.
-        </p>
-        <p>
-            Aplikasi ini dirancang untuk menghasilkan citra motif batik sintetis baru berdasarkan representasi spasial 
-            dan palet warna yang dipelajari secara <em>unsupervised</em> dari kumpulan 1.216 citra motif batik nusantara tanpa label.
-        </p>
-        <p>
-            Dalam arsitektur GAN:
-            <ul>
-                <li><strong>Generator ($G$):</strong> Bertindak sebagai "seniman" yang berusaha menyusun pola visual motif batik dari noise laten $z$.</li>
-                <li><strong>Discriminator ($D$):</strong> Bertindak sebagai "kritikus" yang membedakan antara motif batik asli dan sintetis.</li>
-                <li><strong>Streamlit Deployment:</strong> Menyediakan antarmuka interaktif yang ringan dan cepat khusus untuk proses <em>inference / generation</em> tanpa melakukan pelatihan ulang.</li>
-            </ul>
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("""
-    <div class="batik-card">
-        <div class="batik-card-header">Struktur Direktori Proyek</div>
-        <pre style="background: #FAF6F0; padding: 10px; border-radius: 8px; font-size: 0.85rem; border: 1px solid #E6D7C8;">
-Batik-Gan/
-├── app.py                     # Entry point aplikasi Streamlit
-├── src/                       # Modul Python
-│   ├── config.py              # Konfigurasi & konstanta
-│   ├── generator.py           # Arsitektur Generator DCGAN
-│   ├── discriminator.py       # Arsitektur Discriminator DCGAN
-│   ├── inference.py           # Engine inferensi & download ZIP
-│   ├── preprocessing.py       # Normalisasi & denormalisasi
-│   ├── dataset.py             # Dataset loader & caching
-│   ├── train.py               # Adversarial training pipeline
-│   └── evaluate.py            # Evaluasi FID & Diversity
-├── models/
-│   └── generator_final.pth    # Checkpoint bobot Generator
-├── notebooks/
-│   └── batik_dcgan.ipynb      # Dokumentasi Jupyter 20 Bab
-├── dataset/                   # 1.216 Citra Batik Asli (1024x1024)
-├── requirements.txt           # Dependensi Python
-└── README.md                  # Dokumentasi komprehensif
-        </pre>
-    </div>
-    """, unsafe_allow_html=True)
+elif menu == "ℹ️ Tentang & Warisan Budaya":
+    st.markdown("### ℹ️ Tentang Batik AI Generator")
+    st.markdown(
+        """
+        **Batik AI Generator** adalah proyek *Generative Artificial Intelligence* yang bertujuan mempelajari representasi visual 
+        dari ribuan motif batik tradisional nusantara secara *unsupervised* (tanpa label kelas), kemudian menyintesiskan variasi motif 
+        baru yang estetik, orisinal, dan berkualitas tinggi.
+        
+        #### 🌟 Keunggulan Model Generatif 128×128:
+        1. **Resolusi 4x Lebih Padat**: Meningkatkan densitas piksel dari 64×64 (4.096 px) menjadi 128×128 (16.384 px).
+        2. **Safe Augmentation (Dihedral $D_4$)**: Menerapkan flip dan rotasi 90°/180°/270° yang sesuai dengan karakteristik simetri batik.
+        3. **Evaluasi Objektif & Anti-Leakage**: Pemisahan 80% train dan 20% test berdasarkan Base ID kelompok motif untuk memastikan evaluasi FID valid.
+        """
+    )
 
 # -----------------------------------------------------------------------------
-# 11. POLITE CULTURAL DISCLAIMER (Always Displayed at Bottom)
+# Cultural Heritage Disclaimer Footer
 # -----------------------------------------------------------------------------
-st.markdown("""
-    <div class="disclaimer-box">
-        <strong>⚠️ Catatan &amp; Disclaimer Warisan Budaya:</strong><br>
-        <em>Generated images are AI-generated synthetic patterns and should not be interpreted as historically authentic representations of specific Indonesian batik traditions.</em>
+st.markdown(
+    """
+    <div class="disclaimer-banner">
+        <b>⚠️ Cultural Heritage Disclaimer:</b><br>
+        <i>Generated images are AI-generated synthetic patterns and should not be interpreted as historically authentic representations of specific Indonesian batik traditions.</i>
         Motif yang dihasilkan adalah pola sintetis hasil komputasi model AI generatif yang mempelajari distribusi visual dataset, bukan merupakan replika sah atau motif sakral dari daerah tertentu di Nusantara.
     </div>
-""", unsafe_allow_html=True)
+    """,
+    unsafe_allow_html=True
+)

@@ -1,124 +1,126 @@
 """
 Module: inference.py
-Deskripsi: Engine inferensi dan utilitas generasi citra batik sintetis untuk Streamlit Deployment:
-            - Memuat bobot Generator terlatih dari checkpoint
-            - Menghasilkan sejumlah N citra batik dari vektor laten acak atau berdasar seed
-            - Mengonversi tensor menjadi PIL Image dan PNG buffer biner
-            - Mengemas citra hasil generasi ke dalam file ZIP untuk kemudahan download kolektif
+Deskripsi: Engine inferensi multi-arsitektur untuk generasi motif batik sintetis (128x128 & 64x64).
 """
 
 import os
 import io
 import zipfile
-from typing import List, Tuple, Optional
-from PIL import Image
+from typing import List, Optional, Tuple
 
 import torch
-from src.generator import Generator
-from src.preprocessing import denormalize, tensor_to_pil
-from src.config import NZ, NGF, NC, CANDIDATE_MODEL_PATHS
+import numpy as np
+from PIL import Image
+
+from src.models_128 import ImprovedDCGANGenerator128, StyleGAN2ADAGenerator128
+from src.generator import Generator as BaselineDCGANGenerator64
+from src.config import (
+    MODEL_CHECKPOINT_PATH,
+    MODEL_IMPROVED_DCGAN_PATH,
+    MODEL_STYLEGAN2_PATH,
+    MODEL_BASELINE_DCGAN_PATH,
+    IMAGE_SIZE,
+    LATENT_DIM
+)
 
 def get_device() -> torch.device:
-    """Mengembalikan device komputasi yang tersedia (CUDA GPU jika ada, fallback CPU)."""
-    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    """Mendeteksi ketersediaan hardware GPU (CUDA) atau CPU Multi-Core."""
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    return torch.device("cpu")
 
-def find_checkpoint_path() -> Optional[str]:
-    """Mencari file checkpoint Generator yang valid dari daftar kandidat."""
-    for path in CANDIDATE_MODEL_PATHS:
-        if os.path.exists(path):
-            return path
-    return None
-
-def load_generator(checkpoint_path: Optional[str] = None, device: Optional[torch.device] = None) -> Generator:
+def load_generator(
+    model_type: str = "improved_dcgan",
+    checkpoint_path: Optional[str] = None
+) -> Tuple[torch.nn.Module, int]:
     """
-    Memuat model Generator DCGAN dari checkpoint.
+    Memuat arsitektur Generator berdasarkan pilihan model:
+    - 'improved_dcgan': Improved DCGAN 128x128 (Default Champion)
+    - 'stylegan2_ada': StyleGAN2-ADA 128x128
+    - 'dcgan_baseline': DCGAN Baseline 64x64
+    """
+    device = get_device()
     
-    Args:
-        checkpoint_path: Path ke file .pth (jika None, otomatis mencari)
-        device: Device komputasi PyTorch (jika None, otomatis deteksi)
-    Returns:
-        Instance Generator dalam mode evaluasi (eval)
-    Raises:
-        FileNotFoundError: Jika tidak ada checkpoint yang ditemukan
-    """
-    if device is None:
-        device = get_device()
-        
-    if checkpoint_path is None or not os.path.exists(checkpoint_path):
-        checkpoint_path = find_checkpoint_path()
-        if checkpoint_path is None:
-            raise FileNotFoundError(
-                "Generator model not found. Please make sure the trained model checkpoint exists in the expected models directory."
-            )
+    if model_type == "stylegan2_ada":
+        gen = StyleGAN2ADAGenerator128(z_dim=100, w_dim=128, nc=3)
+        res = 128
+        ckpt = checkpoint_path or MODEL_STYLEGAN2_PATH
+        if not os.path.exists(ckpt):
+            ckpt = MODEL_CHECKPOINT_PATH
+    elif model_type == "dcgan_baseline":
+        gen = BaselineDCGANGenerator64(nz=100, ngf=64, nc=3)
+        res = 64
+        ckpt = checkpoint_path or MODEL_BASELINE_DCGAN_PATH
+        if not os.path.exists(ckpt):
+            ckpt = os.path.join(os.path.dirname(MODEL_CHECKPOINT_PATH), "generator_final.pth")
+    else:  # 'improved_dcgan' default
+        gen = ImprovedDCGANGenerator128(nz=100, ngf=64, nc=3)
+        res = 128
+        ckpt = checkpoint_path or MODEL_IMPROVED_DCGAN_PATH
+        if not os.path.exists(ckpt):
+            ckpt = MODEL_CHECKPOINT_PATH
             
-    generator = Generator(nz=NZ, ngf=NGF, nc=NC).to(device)
-    
-    # Load bobot
-    state_dict = torch.load(checkpoint_path, map_location=device)
-    generator.load_state_dict(state_dict)
-    generator.eval()
-    return generator
+    if os.path.exists(ckpt):
+        try:
+            state = torch.load(ckpt, map_location=device, weights_only=True)
+            gen.load_state_dict(state)
+        except Exception:
+            state = torch.load(ckpt, map_location=device)
+            gen.load_state_dict(state)
+            
+    gen.to(device)
+    gen.eval()
+    return gen, res
 
 def generate_batik_images(
-    generator: Generator,
+    generator: torch.nn.Module,
     num_images: int = 8,
     seed: Optional[int] = None,
-    device: Optional[torch.device] = None
-) -> List[Tuple[Image.Image, bytes]]:
+    latent_dim: int = LATENT_DIM
+) -> List[Image.Image]:
     """
-    Menghasilkan sejumlah citra batik sintetis baru.
+    Menghasilkan N citra motif batik sintetis berformat PIL Image.
+    Menggunakan Tanh output [-1, 1] yang didenormalisasi ke [0, 255].
+    """
+    device = next(generator.parameters()).device
     
-    Args:
-        generator: Model Generator DCGAN yang telah diload
-        num_images: Jumlah citra yang dihasilkan (misal 4, 8, 12, 16)
-        seed: Random seed integer opsional untuk reproduktibilitas
-        device: Device komputasi
-    Returns:
-        List of Tuple (PIL Image, PNG Bytes)
-    """
-    if device is None:
-        device = get_device()
-        
     if seed is not None:
         torch.manual_seed(seed)
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(seed)
-            
-    # Buat vektor laten acak z ~ N(0, I)
-    z = torch.randn(num_images, NZ, 1, 1, device=device)
-    
+        np.random.seed(seed)
+        
     with torch.no_grad():
-        fake_tensors = generator(z).detach().cpu()
+        z = torch.randn(num_images, latent_dim, device=device)
+        fake_tensors = generator(z)
         
-    results = []
-    for i in range(num_images):
-        pil_img = tensor_to_pil(fake_tensors[i])
+        # Denormalisasi [-1, 1] ke [0, 1]
+        fake_tensors = (fake_tensors + 1.0) / 2.0
+        fake_tensors = torch.clamp(fake_tensors, 0.0, 1.0)
         
-        # Simpan ke byte buffer PNG
-        buf = io.BytesIO()
-        pil_img.save(buf, format="PNG")
-        png_bytes = buf.getvalue()
-        
-        results.append((pil_img, png_bytes))
-        
-    return results
+        pil_images = []
+        for i in range(num_images):
+            img_np = fake_tensors[i].cpu().permute(1, 2, 0).numpy()
+            img_uint8 = (img_np * 255.0).astype(np.uint8)
+            pil_img = Image.fromarray(img_uint8)
+            pil_images.append(pil_img)
+            
+    return pil_images
 
 def create_zip_package(
-    image_items: List[Tuple[Image.Image, bytes]],
-    prefix: str = "batik_synthetic"
-) -> bytes:
-    """
-    Mengemas seluruh citra hasil generasi ke dalam satu file ZIP in-memory.
-    
-    Args:
-        image_items: List of Tuple (PIL.Image, png_bytes)
-        prefix: Prefix penamaan file dalam ZIP
-    Returns:
-        Bytes buffer dari file ZIP
-    """
+    images: List[Image.Image],
+    seed: Optional[int] = None,
+    resolution: int = 128
+) -> io.BytesIO:
+    """Mengemas seluruh citra yang dihasilkan ke dalam memory buffer ZIP."""
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-        for idx, (_, png_bytes) in enumerate(image_items):
-            fname = f"{prefix}_{idx+1:02d}.png"
-            zip_file.writestr(fname, png_bytes)
-    return zip_buffer.getvalue()
+        for idx, img in enumerate(images):
+            img_byte_arr = io.BytesIO()
+            img.save(img_byte_arr, format="PNG")
+            img_bytes = img_byte_arr.getvalue()
+            seed_tag = f"_seed_{seed}" if seed is not None else ""
+            zip_file.writestr(f"batik_{resolution}x{resolution}_{idx+1:03d}{seed_tag}.png", img_bytes)
+            
+    zip_buffer.seek(0)
+    return zip_buffer
